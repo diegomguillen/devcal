@@ -1,0 +1,685 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Bitwise Commander</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <script>
+        tailwind.config = {
+            theme: {
+                extend: {
+                    colors: {
+                        gray: {
+                            850: '#1f2937',
+                            900: '#111827',
+                            950: '#030712',
+                        },
+                        tech: {
+                            accent: '#10b981', // Emerald 500
+                            dim: '#374151',    // Gray 700
+                            alert: '#f59e0b',  // Amber 500
+                            info: '#3b82f6',   // Blue 500
+                        }
+                    },
+                    fontFamily: {
+                        mono: ['"Fira Code"', '"Roboto Mono"', 'monospace'],
+                    },
+                    animation: {
+                        'flash-green': 'flashGreen 0.2s ease-out',
+                        'flash-red': 'flashRed 0.2s ease-out',
+                    },
+                    keyframes: {
+                        flashGreen: {
+                            '0%, 100%': { backgroundColor: 'transparent' },
+                            '50%': { backgroundColor: 'rgba(16, 185, 129, 0.2)' },
+                        },
+                        flashRed: {
+                            '0%, 100%': { backgroundColor: 'transparent' },
+                            '50%': { backgroundColor: 'rgba(239, 68, 68, 0.2)' },
+                        }
+                    }
+                }
+            }
+        }
+    </script>
+    <style>
+        ::-webkit-scrollbar { width: 6px; height: 6px; }
+        ::-webkit-scrollbar-track { background: #030712; }
+        ::-webkit-scrollbar-thumb { background: #374151; border-radius: 3px; }
+        ::-webkit-scrollbar-thumb:hover { background: #4b5563; }
+        
+        .bit-cell { transition: all 0.1s ease-in-out; }
+        .bit-cell.active {
+            background-color: #10b981;
+            color: #064e3b;
+            box-shadow: 0 0 8px rgba(16, 185, 129, 0.4);
+            border-color: #10b981;
+        }
+        .bit-cell.operand-cell.active {
+            background-color: #3b82f6; 
+            color: #1e3a8a;
+            border-color: #3b82f6;
+            box-shadow: 0 0 5px rgba(59, 130, 246, 0.4);
+        }
+        .shifting-right { transform: translateX(2px); }
+        .shifting-left { transform: translateX(-2px); }
+    </style>
+</head>
+<body class="bg-gray-950 text-gray-200 font-mono h-screen overflow-hidden flex flex-col">
+
+    <!-- Navbar -->
+    <header class="border-b border-gray-800 bg-gray-900/80 backdrop-blur-md z-50 flex-none">
+        <div class="w-full px-4 py-3 flex flex-col sm:flex-row justify-between items-center gap-3 sm:gap-0">
+            <div class="flex items-center gap-2 self-start sm:self-auto">
+                <svg class="w-6 h-6 text-tech-accent" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 7h6m0 10v-3m-3 3h.01M9 17h.01M9 14h.01M12 14h.01M15 11h.01M12 11h.01M9 11h.01M7 21h10a2 2 0 002-2V5a2 2 0 00-2-2H7a2 2 0 00-2 2v14a2 2 0 002 2z"></path></svg>
+                <h1 class="text-lg font-bold tracking-wider text-gray-100 hidden sm:block">DEV<span class="text-tech-accent">CALC</span></h1>
+            </div>
+            
+            <div class="flex flex-wrap gap-3 items-center justify-center sm:justify-end">
+                <!-- Word Size Radio Group -->
+                <div class="flex bg-gray-800 rounded p-1 gap-1 border border-gray-700" id="wordSizeControl">
+                    <label class="cursor-pointer relative">
+                        <input type="radio" name="wordSize" value="8" class="peer sr-only" checked>
+                        <span class="block px-3 py-1 rounded text-[10px] sm:text-xs text-gray-300 peer-checked:bg-gray-600 peer-checked:text-tech-accent peer-checked:font-bold transition-all hover:text-gray-100">BYTE (8 bits)</span>
+                    </label>
+                    <label class="cursor-pointer relative">
+                        <input type="radio" name="wordSize" value="16" class="peer sr-only">
+                        <span class="block px-3 py-1 rounded text-[10px] sm:text-xs text-gray-300 peer-checked:bg-gray-600 peer-checked:text-tech-accent peer-checked:font-bold transition-all hover:text-gray-100">WORD (16 bits)</span>
+                    </label>
+                    <label class="cursor-pointer relative">
+                        <input type="radio" name="wordSize" value="32" class="peer sr-only">
+                        <span class="block px-3 py-1 rounded text-[10px] sm:text-xs text-gray-300 peer-checked:bg-gray-600 peer-checked:text-tech-accent peer-checked:font-bold transition-all hover:text-gray-100">DWORD (32 bits)</span>
+                    </label>
+                </div>
+
+                <!-- Sign Mode Checkbox -->
+                <div class="flex bg-gray-800 rounded p-1 gap-1 border border-gray-700">
+                    <label class="cursor-pointer relative select-none">
+                        <input type="checkbox" id="signedMode" class="peer sr-only">
+                        <span class="peer-checked:hidden block px-3 py-1 rounded text-[10px] sm:text-xs text-gray-300 hover:text-gray-100 transition-all">UNSIGNED</span>
+                        <span class="hidden peer-checked:block px-3 py-1 rounded text-[10px] sm:text-xs bg-gray-600 text-tech-accent font-bold transition-all shadow-sm">SIGNED</span>
+                    </label>
+                </div>
+            </div>
+        </div>
+    </header>
+
+    <!-- Main Content Layout -->
+    <div class="flex flex-1 overflow-hidden relative">
+        <main class="flex-1 overflow-y-auto p-4 flex flex-col gap-6 relative" id="main-workspace">
+            
+            <section class="flex flex-col gap-2">
+                <label class="text-xs text-gray-300 ml-1 flex justify-between items-center">
+                    <div class="flex items-baseline gap-2">
+                        <span class="font-semibold">EXPRESSION INPUT</span>
+                        <span class="text-[10px] text-gray-400 hidden sm:inline">(Prefix: 0x/h=Hex, 0b/b=Bin, o=Oct)</span>
+                    </div>
+                    <div class="flex items-center gap-3">
+                        <span id="input-status" class="text-[10px] font-bold transition-opacity duration-200"></span>
+                        <span id="input-mode-indicator" class="text-[10px] text-tech-accent font-bold opacity-0 transition-opacity duration-300">DETECTED: HEX</span>
+                    </div>
+                </label>
+                
+                <div class="flex gap-2">
+                    <div class="relative flex-grow">
+                        <input type="text" id="mainInput" placeholder="0xFF, 0b1010, ans + 1..." class="w-full bg-gray-900 text-2xl md:text-3xl text-white px-4 py-4 rounded-lg border border-gray-700 focus:border-tech-accent focus:ring-1 focus:ring-tech-accent outline-none placeholder-gray-500 transition-all font-mono tracking-wide" spellcheck="false" autocomplete="off">
+                        <div id="expand-alert" class="absolute right-2 top-2 hidden">
+                            <span class="text-[10px] px-2 py-0.5 bg-amber-900/40 text-amber-500 border border-amber-700 rounded animate-pulse">OVERFLOW DETECTED</span>
+                        </div>
+                    </div>
+                    <button id="btn-ans" class="bg-gray-800 hover:bg-gray-700 text-tech-accent font-bold border border-gray-700 rounded-lg px-4 flex flex-col items-center justify-center transition-all active:scale-95 shadow-lg">
+                        <span class="text-lg">ANS</span>
+                        <span class="text-[10px] text-gray-400">Last</span>
+                    </button>
+                </div>
+                
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center gap-3 mt-1 px-1">
+                    <div class="flex flex-wrap gap-x-4 gap-y-1 text-[10px] text-gray-400 font-mono select-none">
+                        <span class="flex gap-1 hover:text-gray-200 transition-colors" title="Precedence 12"><b class="text-tech-info">||</b> LogOR</span>
+                        <span class="flex gap-1 hover:text-gray-200 transition-colors" title="Precedence 11"><b class="text-tech-info">&&</b> LogAND</span>
+                        <span class="flex gap-1 hover:text-gray-200 transition-colors" title="Precedence 10"><b class="text-tech-accent">|</b> OR</span>
+                        <span class="flex gap-1 hover:text-gray-200 transition-colors" title="Precedence 9"><b class="text-tech-accent">^</b> XOR</span>
+                        <span class="flex gap-1 hover:text-gray-200 transition-colors" title="Precedence 8"><b class="text-tech-accent">&</b> AND</span>
+                        <span class="flex gap-1 hover:text-gray-200 transition-colors" title="Precedence 5"><b class="text-tech-accent">&lt;&lt;</b> LSH</span>
+                        <span class="flex gap-1 hover:text-gray-200 transition-colors" title="Precedence 5"><b class="text-tech-accent">&gt;&gt;</b> RSH</span>
+                        <span class="flex gap-1 hover:text-gray-200 transition-colors" title="Precedence 2 (Unary)"><b class="text-tech-accent">~</b> NOT</span>
+                    </div>
+                    <div class="flex gap-2 self-end md:self-auto shrink-0">
+                         <button id="btn-shift-left" class="text-[10px] bg-gray-900 border border-gray-800 hover:border-gray-600 px-3 py-1 rounded text-gray-300 hover:text-white transition-colors flex items-center gap-1 group">
+                            <span class="text-tech-accent">&lt;&lt;</span> <span class="group-hover:text-tech-info transition-colors">LSH(AvPag)</span>
+                         </button>
+                         <button id="btn-shift-right" class="text-[10px] bg-gray-900 border border-gray-800 hover:border-gray-600 px-3 py-1 rounded text-gray-300 hover:text-white transition-colors flex items-center gap-1 group">
+                            <span class="group-hover:text-tech-info transition-colors">RSH(RePag)</span> <span class="text-tech-accent">&gt;&gt;</span>
+                         </button>
+                    </div>
+                </div>
+            </section>
+
+            <section class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+                <div class="bg-gray-850 p-3 rounded border border-gray-800 hover:border-gray-600 transition-colors group relative overflow-hidden">
+                    <div class="absolute inset-0 bg-gradient-to-r from-transparent via-gray-800/30 to-transparent translate-x-[-100%] group-hover:animate-[shimmer_1s_infinite]"></div>
+                    <div class="text-[10px] text-gray-400 font-bold mb-1">HEXADECIMAL</div>
+                    <div class="text-xl md:text-2xl text-tech-accent break-all font-medium">0x<span id="disp-hex">0</span></div>
+                </div>
+                <div class="bg-gray-850 p-3 rounded border border-gray-800 hover:border-gray-600 transition-colors">
+                    <div class="text-[10px] text-gray-400 font-bold mb-1">DECIMAL</div>
+                    <div class="text-xl md:text-2xl text-white break-all font-medium" id="disp-dec">0</div>
+                </div>
+                <div class="bg-gray-850 p-3 rounded border border-gray-800 hover:border-gray-600 transition-colors">
+                    <div class="text-[10px] text-gray-400 font-bold mb-1">OCTAL</div>
+                    <div class="text-xl md:text-2xl text-indigo-400 break-all font-medium">0o<span id="disp-oct">0</span></div>
+                </div>
+                <div class="bg-gray-850 p-3 rounded border border-gray-800 hover:border-gray-600 transition-colors">
+                    <div class="text-[10px] text-gray-400 font-bold mb-1">ACTIVE BITS</div>
+                    <div class="text-xl md:text-2xl text-gray-300 font-medium"><span id="active-bits-count">0</span> <span id="total-bits-label" class="text-sm text-gray-400">/ 8</span></div>
+                </div>
+            </section>
+
+            <section id="bitboard-wrapper" class="bg-gray-900 rounded-lg border border-gray-800 p-4 shadow-xl relative overflow-hidden flex-1 min-h-[300px]">
+                 <div id="shift-overlay" class="absolute inset-0 pointer-events-none z-10 opacity-0 transition-opacity duration-200 bg-tech-accent/5"></div>
+                
+                <div class="flex justify-between items-end mb-4 border-b border-gray-800 pb-2">
+                    <h2 class="text-sm font-bold text-gray-200">BITBOARD</h2>
+                    <span class="text-[10px] text-gray-400 uppercase tracking-widest">Interactive Matrix</span>
+                </div>
+
+                <div id="bitboards-container" class="flex flex-col gap-6"></div>
+            </section>
+        </main>
+
+        <aside class="w-80 bg-gray-950 border-l border-gray-800 flex flex-col hidden lg:flex shadow-2xl z-20">
+            <div class="p-3 border-b border-gray-800 bg-gray-900/50 backdrop-blur flex justify-between items-center">
+                <span class="text-xs font-bold text-gray-300 uppercase tracking-wider">History Tape</span>
+                <button class="text-xs text-gray-400 hover:text-red-400" onclick="clearHistory()">Clear</button>
+            </div>
+            <div id="history-list" class="flex-1 overflow-y-auto p-0 space-y-0"></div>
+        </aside>
+    </div>
+
+    <!-- MAIN LOGIC -->
+    <script>
+        const state = {
+            value: 0n,         
+            lastAns: 0n,       
+            wordSize: 8,       
+            signedMode: false, 
+            overflow: false,
+            visualOperands: [] 
+        };
+
+        const getMask = () => (1n << BigInt(state.wordSize)) - 1n;
+        
+        const getDisplayValue = (val) => {
+            const mask = getMask();
+            const cleanVal = val & mask;
+            if (state.signedMode) {
+                const signBit = 1n << BigInt(state.wordSize - 1);
+                if ((cleanVal & signBit) !== 0n) {
+                    return cleanVal - (1n << BigInt(state.wordSize));
+                }
+            }
+            return cleanVal;
+        };
+
+        class Parser {
+            constructor(input) {
+                this.tokens = this.tokenize(input);
+                this.pos = 0;
+                this.topLevelCaptured = false; 
+            }
+
+            tokenize(input) {
+                const tokens = [];
+                // Se añade el flag 'i' para que 'ans' sea insensible a mayúsculas
+                const regex = /\s*(?:(0x[0-9a-fA-F]+|h[0-9a-fA-F]+)|(0b[01]+|b[01]+)|(o[0-7]+)|(d[0-9]+|[0-9]+)|(ans)|(\|\||&&|<<|>>|==|!=|<=|>=|[+\-*\/%&|^!~()<>]))/gyi;
+                let match;
+                while ((match = regex.exec(input)) !== null) {
+                    if (match[1]) tokens.push({ type: 'HEX', val: match[1] });
+                    else if (match[2]) tokens.push({ type: 'BIN', val: match[2] });
+                    else if (match[3]) tokens.push({ type: 'OCT', val: match[3] });
+                    else if (match[4]) tokens.push({ type: 'DEC', val: match[4] });
+                    else if (match[5]) tokens.push({ type: 'ANS' });
+                    else if (match[6]) tokens.push({ type: 'OP', val: match[6] });
+                }
+                return tokens;
+            }
+
+            peek() { return this.tokens[this.pos]; }
+            consume() { return this.tokens[this.pos++]; }
+
+            captureBinaryOp(leftVal, opStr, rightVal) {
+                if (!this.topLevelCaptured) {
+                    state.visualOperands = [
+                        { label: 'Operand A', value: leftVal },
+                        { label: `Operand B ( ${opStr} )`, value: rightVal }
+                    ];
+                    this.topLevelCaptured = true;
+                }
+            }
+
+            parse() {
+                this.topLevelCaptured = false;
+                state.visualOperands = []; 
+                if (this.tokens.length === 0) return state.value;
+                const res = this.parseLogicalOr();
+                if (this.pos < this.tokens.length) throw new Error("Unexpected token");
+                return res;
+            }
+
+            parseLogicalOr() {
+                let left = this.parseLogicalAnd();
+                while (this.peek()?.val === '||') {
+                    const op = this.consume().val;
+                    const right = this.parseLogicalAnd();
+                    this.captureBinaryOp(left, op, right);
+                    left = (left !== 0n || right !== 0n) ? 1n : 0n;
+                }
+                return left;
+            }
+
+            parseLogicalAnd() {
+                let left = this.parseBitOr();
+                while (this.peek()?.val === '&&') {
+                    const op = this.consume().val;
+                    const right = this.parseBitOr();
+                    this.captureBinaryOp(left, op, right);
+                    left = (left !== 0n && right !== 0n) ? 1n : 0n;
+                }
+                return left;
+            }
+
+            parseBitOr() {
+                let left = this.parseBitXor();
+                while (this.peek()?.val === '|') {
+                    const op = this.consume().val;
+                    const right = this.parseBitXor();
+                    this.captureBinaryOp(left, op, right);
+                    left = left | right;
+                }
+                return left;
+            }
+
+            parseBitXor() {
+                let left = this.parseBitAnd();
+                while (this.peek()?.val === '^') {
+                    const op = this.consume().val;
+                    const right = this.parseBitAnd();
+                    this.captureBinaryOp(left, op, right);
+                    left = left ^ right;
+                }
+                return left;
+            }
+
+            parseBitAnd() {
+                let left = this.parseEquality();
+                while (this.peek()?.val === '&') {
+                    const op = this.consume().val;
+                    const right = this.parseEquality();
+                    this.captureBinaryOp(left, op, right);
+                    left = left & right;
+                }
+                return left;
+            }
+
+            parseEquality() {
+                let left = this.parseRelational();
+                while (this.peek() && ['==', '!='].includes(this.peek().val)) {
+                    const op = this.consume().val;
+                    const right = this.parseRelational();
+                    this.captureBinaryOp(left, op, right);
+                    left = (op === '==' ? (left === right) : (left !== right)) ? 1n : 0n;
+                }
+                return left;
+            }
+
+            parseRelational() {
+                let left = this.parseShift();
+                while (this.peek() && ['<', '<=', '>', '>='].includes(this.peek().val)) {
+                    const op = this.consume().val;
+                    const right = this.parseShift();
+                    this.captureBinaryOp(left, op, right);
+                    let res = false;
+                    if (op === '<') res = left < right;
+                    if (op === '<=') res = left <= right;
+                    if (op === '>') res = left > right;
+                    if (op === '>=') res = left >= right;
+                    left = res ? 1n : 0n;
+                }
+                return left;
+            }
+
+            parseShift() {
+                let left = this.parseAdd();
+                while (this.peek() && ['<<', '>>'].includes(this.peek().val)) {
+                    const op = this.consume().val;
+                    const right = this.parseAdd();
+                    this.captureBinaryOp(left, op, right);
+                    if (right < 0n) throw new Error("Negative shift");
+                    left = (op === '<<') ? left << right : left >> right;
+                }
+                return left;
+            }
+
+            parseAdd() {
+                let left = this.parseMult();
+                while (this.peek() && ['+', '-'].includes(this.peek().val)) {
+                    const op = this.consume().val;
+                    const right = this.parseMult();
+                    this.captureBinaryOp(left, op, right);
+                    left = (op === '+') ? left + right : left - right;
+                }
+                return left;
+            }
+
+            parseMult() {
+                let left = this.parseUnary();
+                while (this.peek() && ['*', '/', '%'].includes(this.peek().val)) {
+                    const op = this.consume().val;
+                    const right = this.parseUnary();
+                    this.captureBinaryOp(left, op, right);
+                    if (op === '*') left = left * right;
+                    else if (right === 0n) throw new Error("Div zero");
+                    else if (op === '/') left = left / right;
+                    else left = left % right;
+                }
+                return left;
+            }
+
+            parseUnary() {
+                const t = this.peek();
+                if (t && ['-', '~', '!', '+'].includes(t.val)) {
+                    const op = this.consume().val;
+                    const operand = this.parseUnary();
+                    if (!this.topLevelCaptured) {
+                        state.visualOperands = [{ label: `Operand ( ${op} )`, value: operand }];
+                        this.topLevelCaptured = true;
+                    }
+                    if (op === '-') return -operand;
+                    if (op === '~') return ~operand;
+                    if (op === '!') return operand === 0n ? 1n : 0n;
+                    return operand;
+                }
+                return this.parsePrimary();
+            }
+
+            parsePrimary() {
+                const t = this.peek();
+                if (!t) throw new Error("Unexpected end");
+
+                if (t.val === '(') {
+                    this.consume();
+                    const val = this.parseLogicalOr();
+                    if (this.peek()?.val !== ')') throw new Error("Missing )");
+                    this.consume();
+                    return val;
+                }
+                
+                if (t.type === 'ANS') { 
+                    this.consume(); 
+                    return state.lastAns; 
+                }
+                
+                this.consume();
+                let valStr = t.val;
+                if (t.type === 'HEX') return BigInt('0x' + valStr.replace(/^(0x|h)/i, ''));
+                if (t.type === 'BIN') return BigInt('0b' + valStr.replace(/^(0b|b)/i, ''));
+                if (t.type === 'OCT') return BigInt('0o' + valStr.replace(/^o/i, ''));
+                if (t.type === 'DEC') return BigInt(valStr.replace(/^d/i, ''));
+                
+                throw new Error("Unknown token: " + t.val);
+            }
+        }
+
+        document.addEventListener('DOMContentLoaded', () => {
+            const input = document.getElementById('mainInput');
+            const bitboardsContainer = document.getElementById('bitboards-container');
+
+            const renderBitRow = (label, value, isResult = false) => {
+                const mask = getMask();
+                const maskedVal = value & mask;
+                const rowContainer = document.createElement('div');
+                rowContainer.className = 'flex flex-col gap-2';
+                
+                const labelDiv = document.createElement('div');
+                labelDiv.className = `text-xs font-bold uppercase tracking-wider px-1 flex justify-between ${isResult ? 'text-tech-accent' : 'text-blue-400'}`;
+                labelDiv.innerHTML = `<span>${label}</span> <span class="font-mono text-gray-500">${maskedVal.toString()} (0x${maskedVal.toString(16).toUpperCase()})</span>`;
+                rowContainer.appendChild(labelDiv);
+
+                const grid = document.createElement('div');
+                grid.className = 'flex flex-wrap gap-y-6 gap-x-4 justify-start content-start';
+                
+                for (let i = state.wordSize - 1; i >= 0; i -= 4) {
+                    const nibbleGroup = document.createElement('div');
+                    nibbleGroup.className = 'flex flex-col items-center gap-1';
+                    const indexLabel = document.createElement('div');
+                    indexLabel.className = 'text-[10px] text-gray-500 mb-0.5 w-full text-center border-b border-gray-800 select-none';
+                    const endBit = Math.max(0, i - 3);
+                    indexLabel.innerText = `${i}:${endBit}`; 
+                    nibbleGroup.appendChild(indexLabel);
+
+                    const bitsRow = document.createElement('div');
+                    bitsRow.className = 'flex gap-1';
+
+                    for (let j = 0; j < 4; j++) {
+                        const currentBit = i - j;
+                        if (currentBit < 0) break; 
+                        const btn = document.createElement('button');
+                        const baseStyle = "w-8 h-10 md:w-9 md:h-12 border rounded flex flex-col items-center justify-center select-none transition-all";
+                        const resultStyle = "border-gray-700 bg-gray-800 hover:border-gray-500 cursor-pointer bit-cell";
+                        const operandStyle = "border-gray-800 bg-gray-900 cursor-default opacity-80 bit-cell operand-cell"; 
+                        btn.className = `${baseStyle} ${isResult ? resultStyle : operandStyle}`;
+                        if (isResult) btn.id = `bit-${currentBit}`;
+                        const bitVal = (maskedVal >> BigInt(currentBit)) & 1n;
+                        const valSpan = document.createElement('span');
+                        valSpan.className = 'text-sm font-bold bit-value';
+                        valSpan.innerText = bitVal.toString();
+                        const subIndex = document.createElement('span');
+                        subIndex.className = 'text-[8px] opacity-40 mt-[-2px]';
+                        subIndex.innerText = currentBit;
+                        btn.appendChild(valSpan);
+                        btn.appendChild(subIndex);
+                        if (bitVal === 1n) btn.classList.add('active');
+                        if (isResult) {
+                            btn.onclick = () => {
+                                const bitMask = 1n << BigInt(currentBit);
+                                if ((state.value & bitMask) !== 0n) state.value &= ~bitMask;
+                                else state.value |= bitMask;
+                                updateUI();
+                                input.value = "0x" + (state.value & getMask()).toString(16).toUpperCase();
+                            };
+                        }
+                        bitsRow.appendChild(btn);
+                    }
+                    nibbleGroup.appendChild(bitsRow);
+                    grid.appendChild(nibbleGroup);
+                }
+                rowContainer.appendChild(grid);
+                return rowContainer;
+            };
+
+            const evaluateExpression = (rawInput, isFinal = false) => {
+                const statusEl = document.getElementById('input-status');
+                try {
+                    if (!rawInput.trim()) {
+                        state.visualOperands = [];
+                        updateUI();
+                        statusEl.innerText = '';
+                        return;
+                    }
+
+                    const p = new Parser(rawInput);
+                    const result = p.parse();
+                    const mask = getMask();
+                    if ((result > mask) || (result < 0n && !state.signedMode)) {
+                        state.overflow = true;
+                    } else {
+                        state.overflow = false;
+                    }
+                    state.value = result & mask;
+                    input.classList.remove('border-red-500', 'text-gray-500');
+                    input.classList.add('text-white');
+                    statusEl.innerText = '';
+                    updateUI();
+                    return true;
+                } catch (err) {
+                    const isUnexpectedEnd = err.message.includes("Unexpected end");
+                    if (isFinal) {
+                        input.classList.add('border-red-500');
+                        setTimeout(() => input.classList.remove('border-red-500'), 500);
+                    } else {
+                        if (!isUnexpectedEnd) {
+                            statusEl.innerText = '⚠️ SYNTAX';
+                            statusEl.className = 'text-[10px] font-bold text-amber-500 transition-opacity duration-200 mr-2';
+                            input.classList.remove('text-white');
+                            input.classList.add('text-gray-500');
+                        } else {
+                            statusEl.innerText = '';
+                            input.classList.remove('text-gray-500');
+                            input.classList.add('text-white');
+                        }
+                    }
+                    return false;
+                }
+            };
+            
+            const updateUI = () => {
+                const mask = getMask();
+                const val = state.value & mask;
+                const displayVal = getDisplayValue(val);
+                document.getElementById('disp-dec').innerText = displayVal.toString();
+                document.getElementById('disp-hex').innerText = val.toString(16).toUpperCase();
+                document.getElementById('disp-oct').innerText = val.toString(8);
+                let activeCount = 0;
+                let temp = val;
+                while (temp > 0n) { if (temp & 1n) activeCount++; temp >>= 1n; }
+                document.getElementById('active-bits-count').innerText = activeCount;
+                const alert = document.getElementById('expand-alert');
+                if (state.overflow) alert.classList.remove('hidden');
+                else alert.classList.add('hidden');
+                bitboardsContainer.innerHTML = ''; 
+                state.visualOperands.forEach(op => {
+                    bitboardsContainer.appendChild(renderBitRow(op.label, op.value, false));
+                });
+                bitboardsContainer.appendChild(renderBitRow('RESULT', state.value, true));
+            };
+
+            const wordSizeRadios = document.querySelectorAll('input[name="wordSize"]');
+            const updateWordSize = () => {
+                state.wordSize = parseInt(document.querySelector('input[name="wordSize"]:checked').value);
+                document.getElementById('total-bits-label').innerText = `/ ${state.wordSize}`;
+                if (input.value && input.value.trim().length > 0) evaluateExpression(input.value);
+                else { state.value &= getMask(); updateUI(); }
+            };
+            wordSizeRadios.forEach(r => r.addEventListener('change', updateWordSize));
+            updateWordSize(); 
+
+            document.getElementById('signedMode').addEventListener('change', (e) => {
+                state.signedMode = e.target.checked;
+                updateUI();
+            });
+
+            input.addEventListener('input', (e) => {
+                const val = e.target.value;
+                const indicator = document.getElementById('input-mode-indicator');
+                const valTrim = val.trim().toLowerCase();
+                let mode = '';
+                if (valTrim.startsWith('0x') || valTrim.startsWith('h')) mode = 'HEX';
+                else if (valTrim.startsWith('0b') || valTrim.startsWith('b')) mode = 'BIN';
+                else if (valTrim.startsWith('o')) mode = 'OCT';
+                else if (valTrim.startsWith('d')) mode = 'DEC';
+                indicator.style.opacity = mode ? '1' : '0';
+                if(mode) indicator.innerText = `DETECTED: ${mode}`;
+                evaluateExpression(val);
+            });
+
+            input.addEventListener('keydown', (e) => {
+                if (e.key === 'Enter') {
+                    const rawInput = input.value;
+                    if (evaluateExpression(rawInput, true)) {
+                        state.lastAns = state.value;
+                        addHistoryEntry(rawInput, state.value);
+                    }
+                }
+            });
+
+            document.addEventListener('keydown', (e) => {
+                if (e.key === 'PageDown') { 
+                    e.preventDefault(); 
+                    doShift('left'); 
+                } 
+                else if (e.key === 'PageUp') { 
+                    e.preventDefault(); 
+                    doShift('right'); 
+                }
+            });
+
+            const doShift = (dir) => {
+                const overlay = document.getElementById('shift-overlay');
+                overlay.style.opacity = '1';
+                setTimeout(() => overlay.style.opacity = '0', 150);
+                const mask = getMask();
+                const oldValue = state.value;
+                let newValue = (dir === 'left') ? (state.value << 1n) : (state.value >> 1n);
+                newValue &= mask;
+                state.value = newValue;
+                updateUI();
+                const valStr = input.value.trim().toLowerCase();
+                let prefix = '0x', radix = 16;
+                if (valStr.startsWith('0b') || valStr.startsWith('b')) { prefix = '0b'; radix = 2; }
+                else if (valStr.startsWith('o')) { prefix = 'o'; radix = 8; }
+                else if (valStr.startsWith('d') || /^\d+$/.test(valStr)) { prefix = 'd'; radix = 10; }
+                if (newValue !== oldValue) {
+                    let newStr = newValue.toString(radix).toUpperCase();
+                    if (radix === 10) {
+                        if (valStr.startsWith('d')) input.value = 'd' + newStr;
+                        else input.value = newStr; 
+                    } else {
+                        input.value = prefix + newStr;
+                    }
+                }
+                input.focus();
+            };
+
+            document.getElementById('btn-shift-left').onclick = () => doShift('left');
+            document.getElementById('btn-shift-right').onclick = () => doShift('right');
+            
+            document.getElementById('btn-ans').addEventListener('click', () => {
+                const pos = input.selectionStart;
+                const txt = input.value;
+                // Se inserta 'ans' en minúsculas para consistencia
+                input.value = txt.slice(0, pos) + 'ans' + txt.slice(pos);
+                input.focus();
+                input.dispatchEvent(new Event('input'));
+            });
+
+            window.clearHistory = () => { document.getElementById('history-list').innerHTML = ''; };
+            
+            function addHistoryEntry(expr, val) {
+                const list = document.getElementById('history-list');
+                const entry = document.createElement('div');
+                entry.className = 'group p-3 border-b border-gray-900 hover:bg-gray-900 cursor-pointer transition-colors relative animate-flash-green';
+                const mask = getMask();
+                const maskedVal = val & mask;
+                entry.innerHTML = `
+                    <div class="text-xs text-gray-400 mb-1 text-left break-all font-bold border-b border-gray-800 pb-1">${expr}</div>
+                    <div class="flex flex-col gap-0.5 mt-1">
+                        <div class="text-sm text-tech-accent font-mono text-left">HEX: 0x${maskedVal.toString(16).toUpperCase()}</div>
+                        <div class="text-xs text-gray-300 font-mono text-left">DEC: ${getDisplayValue(val).toString()}</div>
+                        <div class="text-[10px] text-gray-500 font-mono text-left break-all truncate">BIN: ${maskedVal.toString(2)}</div>
+                    </div>
+                    <div class="absolute right-2 top-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                         <span class="text-[10px] text-gray-300 bg-gray-800 px-2 py-1 rounded border border-gray-700">Load</span>
+                    </div>
+                `;
+                entry.onclick = () => {
+                    input.value = "0x" + maskedVal.toString(16).toUpperCase(); 
+                    input.focus();
+                    evaluateExpression(input.value);
+                };
+                list.prepend(entry);
+            }
+        });
+    </script>
+</body>
+</html>
